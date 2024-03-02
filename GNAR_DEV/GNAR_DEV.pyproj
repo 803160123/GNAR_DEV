@@ -22,6 +22,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="GNAR_DEV.py" />
+    <Compile Include="SUB_GNAR\AntennaCheck.py" />
+    <Compile Include="SUB_GNAR\DBConnection.py" />
+    <Compile Include="SUB_GNAR\Menu.py" />
+    <Compile Include="SUB_GNAR\SDEV_435_TESTING.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="SUB_GNAR\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
