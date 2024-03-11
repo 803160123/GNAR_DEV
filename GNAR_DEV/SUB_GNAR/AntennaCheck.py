@@ -16,10 +16,10 @@ import sys
 import pandas as pd
 # import numpy as np
 # import tabulate
-import SUBGNAR.DBConnection as DB
+import SUB_GNAR.DBConnection as DB
 
 
-antennaDecode = 'C:\\Users\\cp965x\\source\\repos\\SDEV_435_TESTING\\SDEV_435_TESTING\\SUBGNAR\\ANTENNA_DECODEv2.csv'
+antennaDecode = 'C:\\Users\\cp965x\\source\\repos\\GNAR_DEV\\GNAR_DEV\\SUB_GNAR\\ANTENNA_DECODEv2.csv'
 
 gnarAntennaPullSql = """ SELECT -- *
 					A.PULLDATE,
@@ -122,6 +122,7 @@ class AntennaAudit():
             sys.exit(1)
     
     def CleanDF(self):
+        """ THIS METHOD CLEANS UP THE ANTENNA DECODE COLUMN AND JOINS THE BAND + MHZ + ANTENNA ELECTRICAL """ 
         cleanAntDf = self.JoinDF()
         # CONVERT BAND TO STR TYPE PRIOR TO BUILDING NEW COLUMN
         cleanAntDf["BAND"] = cleanAntDf["BAND"].astype(str).str.split('.', expand=True)[0]
@@ -131,6 +132,7 @@ class AntennaAudit():
         return cleanAntDf
 
     def AntennaChecksum(self):
+        """ THIS METHOD IS THE FINAL ANTENA DF CHECK, WHICH PRODUCES THE RESULTS AND PRINT TO SCREEN """
         finalAntDf = self.CleanDF()
         finalAntDf["STATUS"] = finalAntDf["antenna_name"].str.strip() == finalAntDf["ENM_MODEL_DECODE"].str.strip()
         # COMMENT OUT THE BELOW FOR ALL DF COLUMNS
@@ -139,6 +141,7 @@ class AntennaAudit():
         return finalAntDf
     
     def TestJoin(self):
+        """ THIS METHOD WILL AGAIN OPEN A CONNECTION TO THE DATABASE AND UPDATE(WRITE) THE CORRECTIONS THAT ARE NEEDED AND LOG THOSE CORREXCTION """
         pass
     
     def ColumnsDf(self):

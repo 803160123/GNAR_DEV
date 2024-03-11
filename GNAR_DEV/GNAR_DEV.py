@@ -13,7 +13,8 @@
 #import datetime
 #import pandas as pd
 #import numpy as np
-#import SUB_GNAR.AntennaCheck as AC
+import SUB_GNAR.AntennaCheck as AC
+import SUB_GNAR.NetworkPower as NETP
 import SUB_GNAR.Menu as MN
 
 
@@ -28,7 +29,12 @@ def gnarMain():
     # AntAudit.CleanDF()
     # AntAudit.AntennaChecksum()
     # MN.menuPrint()
-    MN.getChoice()    
+    # MN.getChoice()    
+    PwrTest = NETP.NetworkPower()
+    # PwrTest.BuildNetPowerDF()
+    # PwrTest.PwrSummary()
+    PwrTest.TempNetworkPwr()
+    # PwrTest.updateNetworkPwr()
     # END OF MAIN FUNCTION
     
   

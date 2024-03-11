@@ -19,10 +19,7 @@ def mssqlConnection():
     DRIVER_NAME = 'SQL SERVER'
     SERVER_NAME = 'NYCDTL01CP965X\SQLEXPRESS'
     DATABASE_NAME = 'GNAR_DEV'
-    
-    # Uid='cp965x';
-    # Pwd='Trucking01';
-
+        
     connection_string = f"""
         DRIVER={{{DRIVER_NAME}}};
         SERVER={SERVER_NAME};
