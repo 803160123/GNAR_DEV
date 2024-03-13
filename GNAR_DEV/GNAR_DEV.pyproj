@@ -23,6 +23,7 @@
   <ItemGroup>
     <Compile Include="GNAR_DEV.py" />
     <Compile Include="SUB_GNAR\AntennaCheck.py" />
+    <Compile Include="SUB_GNAR\AtollPower.py" />
     <Compile Include="SUB_GNAR\DBConnection.py" />
     <Compile Include="SUB_GNAR\Menu.py" />
     <Compile Include="SUB_GNAR\NetworkPower.py" />

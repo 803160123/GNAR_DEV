@@ -98,7 +98,8 @@ powerCheckSql = """WITH SECTF AS( --B
 					-- (CASE WHEN CSRF = 1 THEN (B.TOTAL_DLBW/2) ELSE B.TOTAL_DLBW END) 
 					B.TOTAL_DLBW,
 					-- B.TEST,
-					ROUND(((A.DLCHANNELBANDWIDTH/5) * PWRPER5MHZ),0) AS CALC_ENM_PWR,
+					-- ROUND(((A.DLCHANNELBANDWIDTH/5) * PWRPER5MHZ),0) AS CALC_ENM_PWR,-- THIS IS WRONG NEED TO HARDEN
+	                (CAST(B.TOTAL_DLBW AS FLOAT)/A.DLCHANNELBANDWIDTH) AS CALC_ENM_DEN,
 					B.PWRPER5MHZ,
 					B.TOTAL_TXPWR,
 					B.TOTAL_NOOFTX,
@@ -163,10 +164,11 @@ powerCheckSql = """WITH SECTF AS( --B
 					P.FDD_CNT,
 					P.TOTAL_DLBW,
 					-- B.TEST,
-					P.CALC_ENM_PWR,
+					((P.RRU_PORT_SPEC*P.ENM_NOOFTX)/P.CALC_ENM_DEN) AS CALC_ENM_PWR,
+	                P.CALC_ENM_DEN, -- FOR TESTING
 					P.PWRPER5MHZ,
 					P.TOTAL_TXPWR,
-					P.TOTAL_NOOFTX,
+					P.TOTAL_NOOFTX, -- FOR TESTING
 					P.RRU_PORT_COUNT,
 					P.PWR_PER_PORT,
 					P.RRU_ID,	
@@ -176,9 +178,9 @@ powerCheckSql = """WITH SECTF AS( --B
 					--
 					P.PRODUCTNUMBER,
 					P.CSRF,
-					(CASE WHEN P.RRU_PORT_SPEC <> P.PWR_PER_PORT AND P.ENM_MAXTXPWR <> P.CALC_ENM_PWR THEN 'RRU_PORT_PWR + ENM_MAXPWR'
+					(CASE WHEN P.RRU_PORT_SPEC <> P.PWR_PER_PORT AND P.ENM_MAXTXPWR <> ((P.RRU_PORT_SPEC*P.ENM_NOOFTX)/P.CALC_ENM_DEN) THEN 'RRU_PORT_PWR + ENM_MAXPWR'
 					WHEN P.RRU_PORT_SPEC <> P.PWR_PER_PORT THEN 'RRU_PORT_PWR'
-					WHEN P.ENM_MAXTXPWR <> P.CALC_ENM_PWR THEN 'ENM_MAXPWR'
+					WHEN P.ENM_MAXTXPWR <> ((P.RRU_PORT_SPEC*P.ENM_NOOFTX)/P.CALC_ENM_DEN) THEN 'ENM_MAXPWR'
 					ELSE '' END) AS FLAG
 				FROM PWR P
 				WHERE 1=1
@@ -201,6 +203,7 @@ class NetworkPower():
        print("Network Power Audit Constructor")
 
     def BuildNetPowerDF(self):
+        """ CHANGE THIS TO PASS IN THE SQL AS A PARAMETER """
         """ THIS METHOD IS RESPONSIBLE FOR QUERYING THE NETWORK MSSQL DB AND RETURNING ALL APPLICABLE PARMS (RAW DATAFRAME)"""   
         curs = DB.mssqlConnection()
         curs.execute(powerCheckSql)
@@ -241,7 +244,7 @@ class NetworkPower():
 		cursor = conn.cursor()
 
 		for i,row in df.iterrows():
-			sql = "INSERT INTO table_name (title, summary, url) VALUES (%s,%s,%s)"
+			insert_sql = "INSERT INTO table_name (title, summary, url) VALUES (%s,%s,%s)"
 			cursor.execute(sql, tuple(row))
 
 		conn.commit()
@@ -252,59 +255,23 @@ class NetworkPower():
         """ THIS METHOD IS RESPONSIBLE FOR TAKING THE FAILING DATAFRAM VALUES AND UPDATING THE CORRECT TABLE TO REMEDIATE THE POWER IN THE SQL DB """
         tdf =  self.PwrSummary()
         # print(tdf["STATUS"].dtype())
-        target_value = True
-        """ NEED TO BUILD THE QUERY TO EXECUTE
-        # NEED TO CHECK IF THIS FUNCTION NEEDS TO RUN AT ALL
-        if (tdf["STATUS"] == target_value).any().any():
-            print("THe VALUE EXISTS")
-            THIS WILL BE FOR THE SQL CODE STATEMENT LOOP
-            return True
-        else:
-            print("THE VALUE DOES NOT EXIST")
-            return False
-        """    
-        """
-		for column in tdf.columns:
-            if (tdf["STATUS"] == target_value).any():
-                print(f"VALUE {target_value} EXISTS IN COLUMN '{column}'")
-                return True
-    
-        print(f"VALUE {target_value} DOES NOT EXIST IN THE DataFrame")
-        return False
-		"""
-        for index, row in tdf.iterrows():
-        # Construct the SQL UPDATE statement
-            
-            for column, value in row.items():
-                # if (tdf["STATUS"].bool() == False): 
-                if tdf["flag"].notnull().any():
-                    # update_query += f"ENM_MAXTXPWR = "+tdf["calc_enm_pwr"]+" WHERE EUTRANCELLFDD = "+tdf["eutrancellfdd"]+", "
-                    update_query += f'THIS IS A TEST {tdf["calc_enm_pwr"].astype(str)}, '
-            update_query = update_query[:-2]  # Remove the trailing comma and space
-            # update_query += f" WHERE EUTRANCELLFDD = '{row[key_column]}'"
-        print(update_query)
-						
-        # curs = DB.mssqlConnection()
-        # curs.execute(powerCheckSql)
-		# DB.closeCursor(curs)
-
-    def TempNetworkPwr(self):
-        """ THIS IS A TEST VERSION METHOD FOR MY SQL CODE GENERATION """
-        tdf =  self.PwrSummary()
         table_name = "[dbo].[NETWORK_STATUS_20240226]"
-        update_query = f"UPDATE {table_name} SET "
+        update_query = ""
         key_column = tdf["freqband"]
 		
         for index, row in tdf.iterrows():
+            # NEED TO REFACTOR THIS LOOP TO USE APPLY() w/ A LAMBDA TO MAKE IT FASTER
             if row["STATUS"] == False: 
-                update_query += f"ENM_MAXTXPWR = {row['calc_enm_pwr']} WHERE EUTRANCELLFDD = {row['eutrancellfdd']}, "
-				# print(f"THIS IS A TEST F-STRING {row['eutrancellfdd']} AND MORE {row['STATUS']}")
+                update_query += f"UPDATE {table_name} SET ENM_MAXTXPWR = {row['calc_enm_pwr']} WHERE EUTRANCELLFDD = '{row['eutrancellfdd']}';\n"
+				# print(f"TEST F-STRING {row['eutrancellfdd']} AND MORE {row['STATUS']}")
         
-        update_query = update_query[:-2]  # Remove the trailing comma and space
+        # update_query = update_query[:-2]  # Remove the trailing comma and space
         print(update_query)
-                
+        # curs = DB.mssqlConnection()
+        # curs.execute(powerCheckSql)
+		# DB.closeCursor(curs)        
 			
-        """
+        """ OLD NOTES
 		# Iterate over rows in the DataFrame
         for index, row in tdf.iterrows():
         # Construct the SQL UPDATE statement
@@ -317,6 +284,11 @@ class NetworkPower():
         
         print(update_query)
         """
+       
+    def ReportNetworkPower(self):
+        pass
+		# NEED TO COUNT HOW MANY CHANGES WERE WRITTEN TO THE MSSQL TABLE
+        
         
     # END OF CLASS
 

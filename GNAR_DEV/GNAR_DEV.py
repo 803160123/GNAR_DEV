@@ -33,8 +33,7 @@ def gnarMain():
     PwrTest = NETP.NetworkPower()
     # PwrTest.BuildNetPowerDF()
     # PwrTest.PwrSummary()
-    PwrTest.TempNetworkPwr()
-    # PwrTest.updateNetworkPwr()
+    PwrTest.updateNetworkPwr()
     # END OF MAIN FUNCTION
     
   
