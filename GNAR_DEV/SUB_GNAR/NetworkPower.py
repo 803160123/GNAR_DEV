@@ -165,7 +165,8 @@ powerCheckSql = """WITH SECTF AS( --B
 					P.TOTAL_DLBW,
 					-- B.TEST,
 					((P.RRU_PORT_SPEC*P.ENM_NOOFTX)/P.CALC_ENM_DEN) AS CALC_ENM_PWR,
-	                P.CALC_ENM_DEN, -- FOR TESTING
+	                ROUND((LOG(((P.RRU_PORT_SPEC)/P.CALC_ENM_DEN),10)*10),2) AS CALC_BRANCH_PWR,
+                    P.CALC_ENM_DEN, -- FOR TESTING
 					P.PWRPER5MHZ,
 					P.TOTAL_TXPWR,
 					P.TOTAL_NOOFTX, -- FOR TESTING
@@ -230,15 +231,11 @@ class NetworkPower():
         # cursor.execute("use GNAR_DEV; drop table if exists testtable")
 		# cursor.execute("use GNAR_DEV; create table testtable (column1 varchar, column2 varchar, column3 float, column4 int)")
 		# cursor.commit()  #commits to the table
-
-
-        # SVAE TO DF --> csv WHY ?? BECAUSE OF THE DF DTYPES
+		# SAVE TO DF --> csv WHY ?? BECAUSE OF THE DF DTYPES
         # df.to_csv('testfile.csv', header=df.columns, index=False, encoding='utf-8') 
 		# my_file = open('testfile.csv')
 		# print("FILE OPENED")
 		# SQL_STATEMENT = 
-
-		
 		# cursor.commit()  #commits to the table
         """ conn = mysql.connector.connect(user='root', password='somepassword', host='localhost', port='3306', database='db')
 		cursor = conn.cursor()
@@ -252,24 +249,34 @@ class NetworkPower():
 
 
     def updateNetworkPwr(self):
-        """ THIS METHOD IS RESPONSIBLE FOR TAKING THE FAILING DATAFRAM VALUES AND UPDATING THE CORRECT TABLE TO REMEDIATE THE POWER IN THE SQL DB """
-        tdf =  self.PwrSummary()
-        # print(tdf["STATUS"].dtype())
-        table_name = "[dbo].[NETWORK_STATUS_20240226]"
-        update_query = ""
-        key_column = tdf["freqband"]
+        """ THIS METHOD IS RESPONSIBLE FOR TAKING THE FAILING DATAFRAME VALUES AND UPDATING THE CORRECT TABLE TO REMEDIATE THE POWER IN THE SQL DB """
+        tDf =  self.PwrSummary()
+        # print(tDf["STATUS"].dtype())
+        tableName = "[dbo].[NETWORK_STATUS_20240226]"
+        updateQuery = ""
+        # key_column = tDf["freqband"]
 		
-        for index, row in tdf.iterrows():
+        for index, row in tDf.iterrows():
             # NEED TO REFACTOR THIS LOOP TO USE APPLY() w/ A LAMBDA TO MAKE IT FASTER
             if row["STATUS"] == False: 
-                update_query += f"UPDATE {table_name} SET ENM_MAXTXPWR = {row['calc_enm_pwr']} WHERE EUTRANCELLFDD = '{row['eutrancellfdd']}';\n"
+                updateQuery += f"UPDATE {tableName} SET ENM_MAXTXPWR = {row['calc_enm_pwr']}, ENM_REF_BRANCH_DBM = {row['calc_branch_pwr']} WHERE EUTRANCELLFDD = '{row['eutrancellfdd']}';\n"
 				# print(f"TEST F-STRING {row['eutrancellfdd']} AND MORE {row['STATUS']}")
+                # update_query = update_query[:-2]  # Remove the trailing comma and space
         
-        # update_query = update_query[:-2]  # Remove the trailing comma and space
-        print(update_query)
-        # curs = DB.mssqlConnection()
-        # curs.execute(powerCheckSql)
-		# DB.closeCursor(curs)        
+        # NEED TO  TEST WHETHER THE updateQuery IS NULL BEFORE CONNECTING TO THE DB
+        print(updateQuery)
+        curs = DB.mssqlConnection()
+        try:
+            curs.execute(updateQuery)
+            curs.commit()
+            # ADD A SUMMARY OF UPDATES HERE
+            print('LOOKS LIKE THE UPDATES ARE GOOD TO GO, CHECK EM IN MSSQL')
+        except Exception as e:
+            print(e)
+            print('SOMETHING WENT WRONG, THAT NETWORK SQL UPDATE DIDNT WORK')
+        sys.exit() 
+			
+        DB.closeCursor(curs)        
 			
         """ OLD NOTES
 		# Iterate over rows in the DataFrame

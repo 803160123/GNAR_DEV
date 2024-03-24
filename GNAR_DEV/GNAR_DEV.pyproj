@@ -27,6 +27,7 @@
     <Compile Include="SUB_GNAR\DBConnection.py" />
     <Compile Include="SUB_GNAR\Menu.py" />
     <Compile Include="SUB_GNAR\NetworkPower.py" />
+    <Compile Include="SUB_GNAR\ReportGNAR.py" />
     <Compile Include="SUB_GNAR\SDEV_435_TESTING.py" />
   </ItemGroup>
   <ItemGroup>
