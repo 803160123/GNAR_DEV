@@ -10,16 +10,24 @@
 
 
 # import os
-# import sys
+import sys
 import datetime
 import pandas as pd
 # import numpy as np
 # import tabulate
 import SUB_GNAR.DBConnection as DB
 import SUB_GNAR.ReportGNAR as REP
+from SUB_GNAR.ReportGNAR import logg
 
 
-atollSql = """
+
+           
+class AtollPower():
+    """ATOLL SIMULATION POWER CHECK AUDIT OBJECT THAT TAKES IN A QUERY THAT CONVERTS AND CLEANS DATA AND CREATES A DF TO CHECK POWER PARMS ARE CORRECT"""
+    """ CHANGE THIS TO PASS IN THE SQL AS A PARAMETER """
+    def __init__(self):
+       print("Atoll Power Audit Constructor")
+       self.atollSql = """
 			WITH ATOLL AS(
 				SELECT -- *
 				A.PULLDATE,
@@ -76,8 +84,9 @@ atollSql = """
 			WHERE 1=1 
 			-- AND A.ENODEB = 'UNL05823'
 			AND A.ENODEB LIKE 'UN%'
-			AND A.USID = 61423
-			-- AND A.USID IN (95345, 132292)
+			AND A.USID = 61423 -- UNL00104
+			-- AND A.USID = 115897 -- WEIBEL AVE
+            -- AND A.USID IN (95345, 132292)
 			-- AND A.FREQBAND IN (4,66,2,17,5,29,30)
 			-- AND A.FREQBAND = 30
 			-- AND A.ENM_CRSGAIN NOT IN (0,3,6)
@@ -114,25 +123,34 @@ atollSql = """
 			-- AND (AT.CALC_MISCDLL <> AT.MISCDLL)
 			;
            """
-           
-class AtollPower():
-    """ATOLL SIMULATION POWER CHECK AUDIT OBJECT THAT TAKES IN A QUERY THAT CONVERTS AND CLEANS DATA AND CREATES A DF TO CHECK POWER PARMS ARE CORRECT"""
-    """ CHANGE THIS TO PASS IN THE SQL AS A PARAMETER """
-    def __init__(self):
-       print("Atoll Power Audit Constructor")
+
+       self.reportSql = """
+                USE GNAR_DEV;
+                INSERT INTO dbo.REPORT_HISTORY (
+	            [DATETIME], 
+	            [PULLDATE],
+	            [GNAR_TABLE],
+	            [USID],
+	            [ENODEB], 
+	            [EUTRANCELLFDD],
+	            [PARAMETER],
+	            [PRE],
+	            [POST])
+                VALUES
+                """
 
     def BuildAtollPowerDF(self):
         """ THIS DF WILL BE USED FOR MULTIPLE SIMULATION TESTS AND REMEDIATION """
         curs = DB.mssqlConnection()
-        curs.execute(atollSql)
+        curs.execute(self.atollSql)
         tempDf = curs.fetchall()
         atollDf = pd.DataFrame.from_records(tempDf, columns=[x[0] for x in curs.description])
         DB.closeCursor(curs)
         atollDf["STATUS"] = (atollDf["enm_branch_dbm"] == atollDf["cell_max_power"]) & (atollDf["n_crs_ports"] == atollDf["enm_crsports"]) \
             & (atollDf["enm_pwr_offset"] == atollDf["pbch_power_offset"]) & (atollDf["tx_n_tx_antennas"] == atollDf["enm_nooftx"]) & (atollDf["calc_miscdll"] == atollDf["miscdll"])
         # SEND ATOLL REPORT TO DIRECTORY 
-        # atollPath = REP.buildGnarFile('ATOLL')
-        # atollDf.to_csv(atollPath, index=False)
+        atollPath = REP.buildGnarFile('ATOLL')
+        atollDf.to_csv(atollPath, index=False)
 		# print(atollDf.to_markdown(tablefmt="grid"))  
         return atollDf
 
@@ -141,26 +159,55 @@ class AtollPower():
         aholeDf = self.BuildAtollPowerDF()
         print(aholeDf.to_markdown(tablefmt="grid"))
         sqlCommands = ""
+        reportComm = self.reportSql
         cellTable = '[dbo].[CELLS_ATOLLv1]'
         txTable = '[dbo].[TX_ATOLLv2]'
-        
+        """ I NEED TO CHANGE THE BELOW SQL LOGIC AS IT IS NOT UPDATING ALL OF THE APPROPRIATE DISCREPANCIES, ONLY UPDING THE FIRST CHANGE BECAUSE OF THE IF/ELIF STATEMENT NEED TO REWRITE """
         for index, row in aholeDf.iterrows():
-            # NEED TO REFACTOR THIS LOOP TO USE APPLY() w/ A LAMBDA TO MAKE IT FASTER
+            # NEED TO REFACTOR THIS LOOP TO USE APPLY() w/ A LAMBDA IT CAN BE FASTER
             if (row["enm_branch_dbm"] != row["cell_max_power"]):
                 sqlCommands += f"UPDATE {cellTable} SET MAX_POWER = {row['enm_branch_dbm']} WHERE CELL_ID = '{row['eutrancellfdd']}';\n"
+                reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{cellTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','cell_max_power','{row['cell_max_power']}','{row['enm_branch_dbm']}'),\n"
             elif (row["n_crs_ports"] != row["enm_crsports"]):
                 sqlCommands += f"UPDATE {cellTable} SET N_CRS_PORT = {row['enm_crsports']} WHERE CELL_ID = '{row['eutrancellfdd']}';\n"
+                reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{cellTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','n_crs_port','{row['n_crs_ports']}','{row['enm_crsports']}'),\n"
             elif (row["enm_pwr_offset"] != row["pbch_power_offset"]):
                 sqlCommands += f"UPDATE {cellTable} SET PBCH_POWER_OFFSET = {row['enm_pwr_offset']} WHERE CELL_ID = '{row['eutrancellfdd']}';\n"
+                reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{cellTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','pbch_power_offset','{row['pbch_power_offset']}','{row['enm_pwr_offset']}'),\n"
             elif (row["tx_n_tx_antennas"] != row["enm_nooftx"]):
                 sqlCommands += f"UPDATE {txTable} SET N_TX_ANTENNAS = {row['enm_nooftx']}, N_RX_ANTENNAS = {row['enm_noofrx']} WHERE TX_ID = '{row['tx_id']}';\n"
+                reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{txTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','n_tx_antennas','{row['tx_n_tx_antennas']}','{row['enm_nooftx']}'),\n"
+                reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{txTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','n_rx_antennas','{row['tx_n_rx_antennas']}','{row['enm_noofrx']}'),\n"
             elif (row["calc_miscdll"] != row["miscdll"]):
                 sqlCommands += f"UPDATE {txTable} SET MISCDLL = {row['calc_miscdll']} WHERE TX_ID = '{row['tx_id']}';\n"
-         
-		# NEED TO  TEST WHETHER THE updateQuery IS NULL BEFORE CONNECTING TO THE DB		
-        print(sqlCommands)
-
-
+                reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{txTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','miscdll','{row['miscdll']}','{row['calc_miscdll']}'),\n"
+        # NEED TO  TEST WHETHER THE updateQuery IS NULL BEFORE CONNECTING TO THE DB		
+        # print(reportComm)
+        
+        if sqlCommands == "":
+            print("THERE ARE NO ATOLL DATABASE DISCREPANCIES TO REMEDIATE, NICE JOB!")
+        else:
+            # PRINT STATEMENTS ARE JUST FOR SYNTAX TESTING COMMENT OUT FOR PRODUCTION
+            # print(sqlCommands)
+            reportComm = reportComm[:-2]+';'
+            # print(reportComm)
+            curs = DB.mssqlConnection()
+            try:
+                curs.execute(sqlCommands)
+                curs.commit()
+                # ADD A SUMMARY OF UPDATES HERE
+                print('ATOLL UPDATES WERE COMMITED TO DATABASE')
+                curs.execute(reportComm)
+                curs.commit()
+                print('GNAR REPORT UPDATES WERE COMMITED TO DATABASE')
+            except Exception as err:
+                print(err)
+                print('SOMETHING WENT WRONG, THAT NETWORK SQL UPDATE DIDNT WORK')
+                logg.error(f"DB ATOLL REPORT/ATOLL WRITE ERROR: {err} EXITING")
+                sys.exit() 
+			
+            DB.closeCursor(curs)  
+		
 # END OF ATOLL POWER CLASS
 
 

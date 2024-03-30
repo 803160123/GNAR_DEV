@@ -16,12 +16,21 @@ import pandas as pd
 # import numpy as np
 # import tabulate
 import SUB_GNAR.DBConnection as DB
+import SUB_GNAR.ReportGNAR as REP
+from SUB_GNAR.ReportGNAR import logg
 
 TODAY = datetime.datetime.now()
 TIMESTAMP = TODAY.strftime('%Y%m%d')
 # TIMESTAMP = TODAY.strftime('%Y%m%d-%H%M%S')
 
-powerCheckSql = """WITH SECTF AS( --B
+
+
+
+class NetworkPower():
+    """NETWORK POWER CHECK AUDIT OBJECT THAT TAKES IN A QUERY THAT CONVERTS AND CLEANS DATA AND CREATES A DF TO CHECK POWER PARMS ARE SET CORRECT"""
+    def __init__(self):
+       print("Network Power Audit Constructor")
+       self.powerCheckSql = """WITH SECTF AS( --B
 					SELECT 
 					-- USID,
 					ENODEB, -- NEED TO FIX THIS
@@ -196,18 +205,26 @@ powerCheckSql = """WITH SECTF AS( --B
 				P.EUTRANCELLFDD
 				;
 				"""
-
-
-class NetworkPower():
-    """NETWORK POWER CHECK AUDIT OBJECT THAT TAKES IN A QUERY THAT CONVERTS AND CLEANS DATA AND CREATES A DF TO CHECK POWER PARMS ARE SET CORRECT"""
-    def __init__(self):
-       print("Network Power Audit Constructor")
+       self.reportUpdateQ = """
+                USE GNAR_DEV;
+                INSERT INTO dbo.REPORT_HISTORY (
+	            [DATETIME], 
+	            [PULLDATE],
+	            [GNAR_TABLE],
+	            [USID],
+	            [ENODEB], 
+	            [EUTRANCELLFDD],
+	            [PARAMETER],
+	            [PRE],
+	            [POST])
+                VALUES
+                """
 
     def BuildNetPowerDF(self):
         """ CHANGE THIS TO PASS IN THE SQL AS A PARAMETER """
         """ THIS METHOD IS RESPONSIBLE FOR QUERYING THE NETWORK MSSQL DB AND RETURNING ALL APPLICABLE PARMS (RAW DATAFRAME)"""   
         curs = DB.mssqlConnection()
-        curs.execute(powerCheckSql)
+        curs.execute(self.powerCheckSql)
         tempDf = curs.fetchall()
         pwrDf = pd.DataFrame.from_records(tempDf, columns=[x[0] for x in curs.description])
 		# cursor.commit()  #commits to the table
@@ -220,14 +237,15 @@ class NetworkPower():
         splitDf = self.BuildNetPowerDF()
         splitDf["STATUS"] = (splitDf["enm_maxtxpwr"] == splitDf["calc_enm_pwr"]) & (splitDf["rru_port_spec"] == splitDf["pwr_per_port"])
         # splitDf["STATUS"] = splitDf.apply(lambda row: row["calc_enm_pwr"] + splitDf["enm_maxtxpwr"], axis =1)
-        print(splitDf.to_markdown(tablefmt="grid")) 
+        print(splitDf.to_markdown(tablefmt="grid"))
+        # SEND NETWORK REPORT TO DIRECTORY 
+        networkPath = REP.buildGnarFile('NETWORK')
+        splitDf.to_csv(networkPath, index=False)
         return splitDf
     
     def CreateDaily(self):
         pass
-        """ THIS IS A METHOD THAT WILL CREATE A DAILY TABLE FOR CHANGES """
-        # NEED TO ADD ERROR HANDLING 
-        # EXAMPLE NEED A CURSOR AND OPEN CONNECTION
+        """ THIS IS A METHOD THAT WILL CREATE A DAILY TABLE FOR CHANGES ***THIS IS A PLACEHOLDER FOR A FUTURE DATABASE METHOD """
         # cursor.execute("use GNAR_DEV; drop table if exists testtable")
 		# cursor.execute("use GNAR_DEV; create table testtable (column1 varchar, column2 varchar, column3 float, column4 int)")
 		# cursor.commit()  #commits to the table
@@ -254,29 +272,40 @@ class NetworkPower():
         # print(tDf["STATUS"].dtype())
         tableName = "[dbo].[NETWORK_STATUS_20240226]"
         updateQuery = ""
+        reportBuild = self.reportUpdateQ
         # key_column = tDf["freqband"]
 		
         for index, row in tDf.iterrows():
             # NEED TO REFACTOR THIS LOOP TO USE APPLY() w/ A LAMBDA TO MAKE IT FASTER
             if row["STATUS"] == False: 
                 updateQuery += f"UPDATE {tableName} SET ENM_MAXTXPWR = {row['calc_enm_pwr']}, ENM_REF_BRANCH_DBM = {row['calc_branch_pwr']} WHERE EUTRANCELLFDD = '{row['eutrancellfdd']}';\n"
+                reportBuild += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{tableName}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','enm_maxtxpwr','{row['enm_maxtxpwr']}','{row['calc_enm_pwr']}'),\n"
 				# print(f"TEST F-STRING {row['eutrancellfdd']} AND MORE {row['STATUS']}")
                 # update_query = update_query[:-2]  # Remove the trailing comma and space
         
-        # NEED TO  TEST WHETHER THE updateQuery IS NULL BEFORE CONNECTING TO THE DB
-        print(updateQuery)
-        curs = DB.mssqlConnection()
-        try:
-            curs.execute(updateQuery)
-            curs.commit()
-            # ADD A SUMMARY OF UPDATES HERE
-            print('LOOKS LIKE THE UPDATES ARE GOOD TO GO, CHECK EM IN MSSQL')
-        except Exception as e:
-            print(e)
-            print('SOMETHING WENT WRONG, THAT NETWORK SQL UPDATE DIDNT WORK')
-        sys.exit() 
+        if updateQuery == "":
+            print("THERE ARE NO NETWORK DATABASE DISCREPANCIES TO REMEDIATE, NICE JOB!")
+        else:
+            # print(updateQuery)
+            reportBuild = reportBuild[:-2]+';'
+            # print(reportBuild)
+            curs = DB.mssqlConnection()
+            try:
+                curs.execute(updateQuery)
+                curs.commit()
+                print('NETWORK POWER UPDATES WERE COMMITTED TO THE DATABASE')
+                curs.execute(reportBuild)
+                curs.commit()
+                print('GNAR REPORT UPDATES WERE COMMITED TO DATABASE')
+            except Exception as err:
+                print(err)
+                print('SOMETHING WENT WRONG, THAT NETWORK SQL UPDATE DIDNT WORK')
+                logg.error(f"EXCEPTION ERROR:{err} Failed to execute network update query: Exiting")
+                sys.exit(1) 
 			
-        DB.closeCursor(curs)        
+        DB.closeCursor(curs)  
+        
+        # END OF UPDATE NETWORK METHOD.  
 			
         """ OLD NOTES
 		# Iterate over rows in the DataFrame
@@ -294,6 +323,7 @@ class NetworkPower():
        
     def ReportNetworkPower(self):
         pass
+        # THIS IS A PLACE HOLDER.
 		# NEED TO COUNT HOW MANY CHANGES WERE WRITTEN TO THE MSSQL TABLE
         
         

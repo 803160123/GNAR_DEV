@@ -14,35 +14,45 @@ from SUB_GNAR.AtollPower import AtollPower
 import SUB_GNAR.NetworkPower as NETP
 import SUB_GNAR.Menu as MN
 import SUB_GNAR.ReportGNAR as REP
+from SUB_GNAR.ReportGNAR import logg
 
 
-def gnarMain():
+def gnarMain() -> None:
     """ GNAR Application Main() function"""
     # FIRST FUNCTION BUILDS A DAILY REPORTING REPO IN THE FOLDER OF USERS CHOICE
     REP.buildGnarDir()
+    logg.info('GNAR IS STARTING')
     # mssqlConnection()
-    # AC.MakeCSV(AC.antennaDecode)
+    
+    ### ANTENA AUDIT BUILD ###
     # AntAudit = AC.AntennaAudit() 
+    # AntAudit.AntennaChecksum()
+    # AntAudit.AntennaCorrect()
+
+
+    ### ANTENNA METHOD TESTING ###
+    # AC.MakeCSV(AC.antennaDecode)
     # AntAudit.buildAntennaDF()
     # AntAudit.MakeCSV()
     # AntAudit.joinDF()
     # AntAudit.CleanDF()
-    # AntAudit.AntennaChecksum()
+    
     ### MENU TESTING ###
     # MN.menuPrint()
     # MN.getChoice()    
-    #### CREATE NETWORK CLASS ####
-    # PwrTest = NETP.NetworkPower()
+        
     #### TEST NETWORK POWER OUTPUT FULL ####
-    # PwrTest.updateNetworkPwr()
-    ### TESTING METHODS
+    PwrTest = NETP.NetworkPower()
+    PwrTest.updateNetworkPwr()
+    
+    ### TESTING NETWORK BUILD ###
     # PwrTest.BuildNetPowerDF()
     # PwrTest.PwrSummary()
     
-    #### SIMULATION DB TESTING ### 
-    AtollAudit = AtollPower()
+    #### SIMULATION ATOLL DB BUILD ### 
+    # AtollAudit = AtollPower()
     # AtollAudit.BuildAtollPowerDF()
-    AtollAudit.updateAtollParms()
+    # AtollAudit.updateAtollParms()
         
     # END OF MAIN FUNCTION
  
@@ -52,6 +62,7 @@ if __name__ == '__main__':
 
     gnarMain()
     print("THats all folks")
+    logg.info("GNAR IS EXITING EXIT CODE 0")
 
 # END OF PY SCRIPT
 

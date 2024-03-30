@@ -17,13 +17,21 @@ import pandas as pd
 # import numpy as np
 # import tabulate
 import SUB_GNAR.DBConnection as DB
+import SUB_GNAR.ReportGNAR as REP
+from SUB_GNAR.ReportGNAR import logg
 
 
-antennaDecode = 'C:\\Users\\cp965x\\source\\repos\\GNAR_DEV\\GNAR_DEV\\SUB_GNAR\\ANTENNA_DECODEv2.csv'
 
-gnarAntennaPullSql = """ SELECT -- *
+class AntennaAudit():
+    """ANTENNA CHECK AUDIT OBJECT THAT TAKES IN A QUERY AND A FLATFILE (ANTENNA DECODER) THAT CONVERTS AND CLEANS DATA AND CREATES A DF"""
+    def __init__(self, decoder=None, antennaSql=None):
+        print("AntennaCheck Constructor")
+        self.antennaDecode = 'C:\\Users\\cp965x\\source\\repos\\GNAR_DEV\\GNAR_DEV\\SUB_GNAR\\ANTENNA_DECODEv2.csv'
+
+        self.gnarAntennaPullSql = """ SELECT -- *
 					A.PULLDATE,
-					-- A.SITE_NAME, -- OPTIONAL FOR TESTING
+					A.USID,
+                    -- A.SITE_NAME, -- OPTIONAL FOR TESTING
 					A.ENODEB,
 					A.EUTRANCELLFDD,
 					T.TX_ID,
@@ -52,24 +60,33 @@ gnarAntennaPullSql = """ SELECT -- *
 					JOIN [dbo].[TX_ATOLLv2] T ON T.TX_ID = ID.TX_ID
 					WHERE 1=1 
 					-- AND A.ENODEB = 'UNL05823'
-					AND A.USID = 60590
-					AND A.ENODEB LIKE 'UN%'
+					-- AND A.USID = 60590 VA HOSPITAL
+					AND A.USID = 95345
+                    AND A.ENODEB LIKE 'UN%'
 					AND A.FREQBAND IN (4,66,2,17,5,29,66)
 					;	
-				"""
-
-
-class AntennaAudit():
-    """ANTENNA CHECK AUDIT OBJECT THAT TAKES IN A QUERY AND A FLATFILE (ANTENNA DECODER) THAT CONVERTS AND CLEANS DATA AND CREATES A DF"""
-    def __init__(self, decoder=None, antennaSql=None):
-        self.decoder = antennaDecode
-        self.antennaSql = gnarAntennaPullSql
-        print("AntennaCheck Constructor")
+                    """
+        self.decoder = self.antennaDecode
+        self.antennaSql = self.gnarAntennaPullSql
+        self.antReportUpdateQ = """
+                USE GNAR_DEV;
+                INSERT INTO dbo.REPORT_HISTORY (
+	            [DATETIME], 
+	            [PULLDATE],
+	            [GNAR_TABLE],
+	            [USID],
+	            [ENODEB], 
+	            [EUTRANCELLFDD],
+	            [PARAMETER],
+	            [PRE],
+	            [POST])
+                VALUES
+                """
 
     def BuildAntennaDF(self):
         """ THIS METHOD IS RESPONSIBLE FOR QUERYING THE SIMULATION AND NETWORK MSSQL DB AND RETURNING ALL APPLICABLE PARMS"""   
         curs = DB.mssqlConnection()
-        curs.execute(gnarAntennaPullSql)
+        curs.execute(self.gnarAntennaPullSql)
         tempDf = curs.fetchall()
         antDf = pd.DataFrame.from_records(tempDf, columns=[x[0] for x in curs.description])
 		# SQL TESTING
@@ -84,22 +101,21 @@ class AntennaAudit():
     def MakeCSV(self):
         """METHOD CONVERTS CSV FILE TO DATAFRAME"""
         try:
-            antFile = pd.read_csv(antennaDecode)
+            antFile = pd.read_csv(self.antennaDecode)
             # print("CREATED A DF CALLED antFile")
 			# FOR TESTING 
             # top5Lines = antFile.head()
             # print(top5Lines.to_markdown(tablefmt="grid"))
             return antFile
+        except Exception as err:
+            print("EXCEPTION ERROR: {0}".format(err))
+            logg.error(f"VALUE ERROR:{err} Failed to convert csv to DF: Exiting")
+            sys.exit(1)
         except ValueError as verr:
             print("VALUE ERROR: {0}".format(verr))
-			# NEED TO DEFINE MY LOGGING 
-			# logging.error("TYPE ERROR: Failed to convert csv to DF: Exiting")
+            logg.error(f"VALUE ERROR:{verr} Failed to convert csv to DF: Exiting")
             sys.exit(1)
-        except TypeError as terr:
-            print("TYPE ERROR: {0}".format(terr))
-			# NEED TO DEFINE MY LOGGING 
-			# logging.error("TYPE ERROR: Failed to convert csv to DF: Exiting")
-            sys.exit(1)
+        
 
     def JoinDF(self):
         """ THIS METHOD CALLS THE csv AND sql METHODS AND DOES A LEFT JOIN ON THE 2 DATA SETS """
@@ -110,15 +126,17 @@ class AntennaAudit():
             joinedDf = pd.merge(queryDf, decoderDf, on='enm_antmodel_key', how='left')
             # print(joinedDf.to_markdown(tablefmt="grid")) 
             return joinedDf
+        except Exception as err:
+            print("EXCEPTION ERROR: {0}".format(err))
+            logg.error(f"VALUE ERROR:{err} Failed to join dataframes: Exiting")
+            sys.exit(1)
         except ValueError as verr:
             print("VALUE ERROR: {0}".format(verr))
-			# NEED TO DEFINE MY LOGGING 
-			# logging.error("TYPE ERROR: Failed to join dataframes: Exiting")
+            logg.error(f"VALUE ERROR: {verr} Failed to join dataframes: Exiting")
             sys.exit(1)
         except TypeError as terr:
             print("TYPE ERROR: {0}".format(terr))
-			# NEED TO DEFINE MY LOGGING 
-			# logging.error("TYPE ERROR: Failed to join dataframes: Exiting")
+            logg.error(f"TYPE ERROR:{terr} Failed to join dataframes: Exiting")
             sys.exit(1)
     
     def CleanDF(self):
@@ -132,29 +150,61 @@ class AntennaAudit():
         return cleanAntDf
 
     def AntennaChecksum(self):
-        """ THIS METHOD IS THE FINAL ANTENA DF CHECK, WHICH PRODUCES THE RESULTS AND PRINT TO SCREEN """
+        """ THIS METHOD IS THE FINAL ANTENNA DF CHECK, WHICH PRODUCES THE RESULTS AND PRINT TO SCREEN """
         finalAntDf = self.CleanDF()
         finalAntDf["STATUS"] = finalAntDf["antenna_name"].str.strip() == finalAntDf["ENM_MODEL_DECODE"].str.strip()
         # COMMENT OUT THE BELOW FOR ALL DF COLUMNS
-        finalAntDf = finalAntDf[["pulldate", "enodeb", "eutrancellfdd", "tx_id", "cell_id", "enm_antenna", "enm_antenna_etilt", "antenna_name", "enm_antmodel_key", "ENM_MODEL_DECODE", "STATUS"]]
+        finalAntDf = finalAntDf[["pulldate", "usid", "enodeb", "eutrancellfdd", "tx_id", "cell_id", "enm_antenna", "enm_antenna_etilt", "antenna_name", "enm_antmodel_key", "ENM_MODEL_DECODE", "STATUS"]]
         print(finalAntDf.to_markdown(tablefmt="grid")) 
+        # SEND ANTENNA ATOLL REPORT TO DIRECTORY 
+        antennaPath = REP.buildGnarFile('ANTENNA')
+        finalAntDf.to_csv(antennaPath, index=False)
         return finalAntDf
     
-    def TestJoin(self):
+    def AntennaCorrect(self):
         """ THIS METHOD WILL AGAIN OPEN A CONNECTION TO THE DATABASE AND UPDATE(WRITE) THE CORRECTIONS THAT ARE NEEDED AND LOG THOSE CORREXCTION """
-        pass
+        fixAntDf =  self.AntennaChecksum()
+        antTableName = "[dbo].[TX_ATOLLv2]"
+        antUpdateQuery = ""
+        antReportBuilder = self.antReportUpdateQ
+        
+        for index, row in fixAntDf.iterrows():
+            # NEED TO REFACTOR THIS LOOP TO USE APPLY() w/ A LAMBDA TO MAKE IT FASTER
+            if row["STATUS"] == False: 
+                antUpdateQuery += f"UPDATE {antTableName} SET ANTENNA_NAME = '{row['ENM_MODEL_DECODE']}' WHERE TX_ID = '{row['tx_id']}';\n"
+                antReportBuilder += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{antTableName}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','antenna_name','{row['antenna_name']}','{row['ENM_MODEL_DECODE']}'),\n"
+            
+        if antUpdateQuery == "":
+            print("THERE ARE NO ATOLL ANTENNA DATABASE DISCREPANCIES TO REMEDIATE, NICE JOB!")
+        else:
+            # print(antUpdateQuery)
+            antReportBuilder = antReportBuilder[:-2]+';'
+            # print(antReportBuilder)
+            curs = DB.mssqlConnection()
+            try:
+                curs.execute(antUpdateQuery)
+                curs.commit()
+                print('ATOLL ANTENNA UPDATES WERE COMMITTED TO THE DATABASE')
+                curs.execute(antReportBuilder)
+                curs.commit()
+                print('GNAR REPORT UPDATES WERE COMMITED TO DATABASE')
+            except Exception as err:
+                print(err)
+                print('SOMETHING WENT WRONG, THAT NETWORK SQL UPDATE DIDNT WORK')
+                logg.error(f"EXCEPTION ERROR:{err} Failed to commit antenna changes to DB: Exiting")
+                sys.exit(1) 
+			
+        DB.closeCursor(curs)  
+
+
     
-    def ColumnsDf(self):
+    def ColumnsDf(self) -> None: 
         queryDf = self.buildAntennaDF()
         columns = queryDf.columns
         print("THE DF COLUMNS ARE:")
         for name in columns:
             print(name)
      
-        
-        
  
-
-
 # END OF ANTENNA CHECK CLASS  
 # END OF PY SCRIPT  

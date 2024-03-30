@@ -2,7 +2,7 @@
 # Name: Chris Park
 # Course: SDEV 435 Applied SW Practice I
 # Date: 20240218
-# Purpose: MSSQL CONNECTION
+# Purpose: MSSQL CONNECTION <DBConnection.py>
 # Functions: GNAR CONNECTTO MSSQL DB
 # Update: 
 ######################################################################################
@@ -10,6 +10,7 @@
 #import os
 import sys
 import pypyodbc as odbc
+from SUB_GNAR.ReportGNAR import logg
   
 def mssqlConnection():    
     """ function connects to local mssql GNAR_DEV database where network and simulation data is stored"""
@@ -29,13 +30,15 @@ def mssqlConnection():
     try:
         conn = odbc.connect(connection_string)
         print(conn) # PRINTS THE ODBC CONNECTION STRING
-    except Exception as e:
-        print(e)
+        logg.info(f"CONN ESTABLISHED {conn}")
+    except Exception as err:
+        print(err)
         print('TEST CONNECTION IS BAD, CHECK THAT DATABASE IS RUNNING')
+        logg.error(f"DB CONNECTION ERROR: {err} EXITING")
         sys.exit() 
     else:
         cursor = conn.cursor()
-        print('FIRE THAT QUERY UP')
+        # print('FIRE THAT QUERY UP')
         return cursor
        
     # END OF FUNCTION 
@@ -43,9 +46,11 @@ def mssqlConnection():
 def closeCursor(cur):
     try:
         cur.close() #when we are done with the cursor.
-    except Exception as e:
-        print(e)
+    except Exception as err:
+        print(err)
         print('NOT ABLE TO CLOSE TEST CONNECTION, SOMETHING WENT WRONG')
+        logg.error(f"DB CONNECTION CLOSE ERROR: {err} EXITING")
         sys.exit() 
     else:
         print('<pypyodbc.Connection closed>') 
+        logg.info("DB CONNECTION CLOSED")
