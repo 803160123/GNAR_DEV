@@ -237,35 +237,22 @@ class NetworkPower():
         splitDf = self.BuildNetPowerDF()
         splitDf["STATUS"] = (splitDf["enm_maxtxpwr"] == splitDf["calc_enm_pwr"]) & (splitDf["rru_port_spec"] == splitDf["pwr_per_port"])
         # splitDf["STATUS"] = splitDf.apply(lambda row: row["calc_enm_pwr"] + splitDf["enm_maxtxpwr"], axis =1)
-        print(splitDf.to_markdown(tablefmt="grid"))
+        # print(splitDf.to_markdown(tablefmt="grid"))
         # SEND NETWORK REPORT TO DIRECTORY 
         networkPath = REP.buildGnarFile('NETWORK')
         splitDf.to_csv(networkPath, index=False)
         return splitDf
     
-    def CreateDaily(self):
-        pass
-        """ THIS IS A METHOD THAT WILL CREATE A DAILY TABLE FOR CHANGES ***THIS IS A PLACEHOLDER FOR A FUTURE DATABASE METHOD """
-        # cursor.execute("use GNAR_DEV; drop table if exists testtable")
-		# cursor.execute("use GNAR_DEV; create table testtable (column1 varchar, column2 varchar, column3 float, column4 int)")
-		# cursor.commit()  #commits to the table
-		# SAVE TO DF --> csv WHY ?? BECAUSE OF THE DF DTYPES
-        # df.to_csv('testfile.csv', header=df.columns, index=False, encoding='utf-8') 
-		# my_file = open('testfile.csv')
-		# print("FILE OPENED")
-		# SQL_STATEMENT = 
-		# cursor.commit()  #commits to the table
-        """ conn = mysql.connector.connect(user='root', password='somepassword', host='localhost', port='3306', database='db')
-		cursor = conn.cursor()
-
-		for i,row in df.iterrows():
-			insert_sql = "INSERT INTO table_name (title, summary, url) VALUES (%s,%s,%s)"
-			cursor.execute(sql, tuple(row))
-
-		conn.commit()
-		conn.close() """
-
-
+    def ReportNetworkPwr(self) ->None:
+        shortNetDf = self.PwrSummary()
+        shortNetDf = shortNetDf[["pulldate", "enodeb", "eutrancellfdd", "enm_nooftx", "enm_maxtxpwr", "calc_enm_pwr", "rru_port_count", "pwr_per_port", "flag", "STATUS"]]
+        message3 = ['POWER NETWORK DB -- AUDIT']
+        msg3Dict = {'OPTION 3': message3}    
+        msg3Df = pd.DataFrame(msg3Dict)
+        print(msg3Df.to_markdown(tablefmt="grid", index=False))
+        print(shortNetDf.to_markdown(tablefmt="grid"))
+    
+    
     def updateNetworkPwr(self):
         """ THIS METHOD IS RESPONSIBLE FOR TAKING THE FAILING DATAFRAME VALUES AND UPDATING THE CORRECT TABLE TO REMEDIATE THE POWER IN THE SQL DB """
         tDf =  self.PwrSummary()
@@ -283,10 +270,16 @@ class NetworkPower():
 				# print(f"TEST F-STRING {row['eutrancellfdd']} AND MORE {row['STATUS']}")
                 # update_query = update_query[:-2]  # Remove the trailing comma and space
         
+        message4 = ['POWER NETWORK DB -- REMEDIATION']
+        msg4Dict = {'OPTION 4': message4}    
+        msg4Df = pd.DataFrame(msg4Dict)
+        print(msg4Df.to_markdown(tablefmt="grid", index=False))
         if updateQuery == "":
             print("THERE ARE NO NETWORK DATABASE DISCREPANCIES TO REMEDIATE, NICE JOB!")
         else:
-            # print(updateQuery)
+            shortTDf = tDf[["pulldate", "enodeb", "eutrancellfdd", "enm_nooftx", "enm_maxtxpwr", "calc_enm_pwr", "rru_port_count", "pwr_per_port", "flag", "STATUS"]]
+            print(shortTDf.to_markdown(tablefmt="grid"))
+			# print(updateQuery)
             reportBuild = reportBuild[:-2]+';'
             # print(reportBuild)
             curs = DB.mssqlConnection()
@@ -326,8 +319,29 @@ class NetworkPower():
         # THIS IS A PLACE HOLDER.
 		# NEED TO COUNT HOW MANY CHANGES WERE WRITTEN TO THE MSSQL TABLE
         
-        
-    # END OF CLASS
+    def CreateDaily(self):
+        pass
+        """ THIS IS A METHOD THAT WILL CREATE A DAILY TABLE FOR CHANGES ***THIS IS A PLACEHOLDER FOR A FUTURE DATABASE METHOD """
+        # cursor.execute("use GNAR_DEV; drop table if exists testtable")
+		# cursor.execute("use GNAR_DEV; create table testtable (column1 varchar, column2 varchar, column3 float, column4 int)")
+		# cursor.commit()  #commits to the table
+		# SAVE TO DF --> csv WHY ?? BECAUSE OF THE DF DTYPES
+        # df.to_csv('testfile.csv', header=df.columns, index=False, encoding='utf-8') 
+		# my_file = open('testfile.csv')
+		# print("FILE OPENED")
+		# SQL_STATEMENT = 
+		# cursor.commit()  #commits to the table
+        """ conn = mysql.connector.connect(user='root', password='somepassword', host='localhost', port='3306', database='db')
+		cursor = conn.cursor()
+
+		for i,row in df.iterrows():
+			insert_sql = "INSERT INTO table_name (title, summary, url) VALUES (%s,%s,%s)"
+			cursor.execute(sql, tuple(row))
+
+		conn.commit()
+		conn.close() """   
+    
+	# END OF CLASS
 
 
 # END OF NetworkPower PY SCRIPT

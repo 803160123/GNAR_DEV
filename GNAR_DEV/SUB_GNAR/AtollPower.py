@@ -151,13 +151,22 @@ class AtollPower():
         # SEND ATOLL REPORT TO DIRECTORY 
         atollPath = REP.buildGnarFile('ATOLL')
         atollDf.to_csv(atollPath, index=False)
-		# print(atollDf.to_markdown(tablefmt="grid"))  
+        # print(atollDf.to_markdown(tablefmt="grid"))  
         return atollDf
+    
+    def ReportAtollPower(self) -> None:
+        atollShortyDf = self.BuildAtollPowerDF() 
+        message1 = ['POWER SIMULATION DB -- AUDIT']
+        msg1Dict = {'OPTION 1': message1}    
+        msg1Df = pd.DataFrame(msg1Dict)
+        print(msg1Df.to_markdown(tablefmt="grid", index=False))
+        atollShortyDf = atollShortyDf[["pulldate", "tx_id", "cell_id", "tx_n_tx_antennas", \
+                          "tx_n_rx_antennas", "cell_max_power", "miscdll", "n_crs_ports", "flag", "STATUS"]]
+        print(atollShortyDf.to_markdown(tablefmt="grid")) 
 
     def updateAtollParms(self):
         """ THIS METHOD IS RESPONSIBLE FOR TAKING THE FAILING ATOLL(SIMULATION) DATAFRAME VALUES AND UPDATING THE CORRECT TABLE TO REMEDIATE THE POWER IN THE SQL DB """
-        aholeDf = self.BuildAtollPowerDF()
-        print(aholeDf.to_markdown(tablefmt="grid"))
+        aholeDf = self.BuildAtollPowerDF()        
         sqlCommands = ""
         reportComm = self.reportSql
         cellTable = '[dbo].[CELLS_ATOLLv1]'
@@ -168,25 +177,32 @@ class AtollPower():
             if (row["enm_branch_dbm"] != row["cell_max_power"]):
                 sqlCommands += f"UPDATE {cellTable} SET MAX_POWER = {row['enm_branch_dbm']} WHERE CELL_ID = '{row['eutrancellfdd']}';\n"
                 reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{cellTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','cell_max_power','{row['cell_max_power']}','{row['enm_branch_dbm']}'),\n"
-            elif (row["n_crs_ports"] != row["enm_crsports"]):
+            if (row["n_crs_ports"] != row["enm_crsports"]):
                 sqlCommands += f"UPDATE {cellTable} SET N_CRS_PORT = {row['enm_crsports']} WHERE CELL_ID = '{row['eutrancellfdd']}';\n"
                 reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{cellTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','n_crs_port','{row['n_crs_ports']}','{row['enm_crsports']}'),\n"
-            elif (row["enm_pwr_offset"] != row["pbch_power_offset"]):
+            if (row["enm_pwr_offset"] != row["pbch_power_offset"]):
                 sqlCommands += f"UPDATE {cellTable} SET PBCH_POWER_OFFSET = {row['enm_pwr_offset']} WHERE CELL_ID = '{row['eutrancellfdd']}';\n"
                 reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{cellTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','pbch_power_offset','{row['pbch_power_offset']}','{row['enm_pwr_offset']}'),\n"
-            elif (row["tx_n_tx_antennas"] != row["enm_nooftx"]):
+            if (row["tx_n_tx_antennas"] != row["enm_nooftx"]):
                 sqlCommands += f"UPDATE {txTable} SET N_TX_ANTENNAS = {row['enm_nooftx']}, N_RX_ANTENNAS = {row['enm_noofrx']} WHERE TX_ID = '{row['tx_id']}';\n"
                 reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{txTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','n_tx_antennas','{row['tx_n_tx_antennas']}','{row['enm_nooftx']}'),\n"
                 reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{txTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','n_rx_antennas','{row['tx_n_rx_antennas']}','{row['enm_noofrx']}'),\n"
-            elif (row["calc_miscdll"] != row["miscdll"]):
+            if (row["calc_miscdll"] != row["miscdll"]):
                 sqlCommands += f"UPDATE {txTable} SET MISCDLL = {row['calc_miscdll']} WHERE TX_ID = '{row['tx_id']}';\n"
                 reportComm += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{txTable}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','miscdll','{row['miscdll']}','{row['calc_miscdll']}'),\n"
-        # NEED TO  TEST WHETHER THE updateQuery IS NULL BEFORE CONNECTING TO THE DB		
+        
         # print(reportComm)
         
+        message2 = ['POWER SIMULATION DB -- REMEDIATION']
+        msg2Dict = {'OPTION 2': message2}    
+        msg2Df = pd.DataFrame(msg2Dict)
+        print(msg2Df.to_markdown(tablefmt="grid", index=False))
         if sqlCommands == "":
             print("THERE ARE NO ATOLL DATABASE DISCREPANCIES TO REMEDIATE, NICE JOB!")
         else:
+            aholeShortyDf = aholeDf[["pulldate", "tx_id", "cell_id", "tx_n_tx_antennas", \
+                          "tx_n_rx_antennas", "cell_max_power", "miscdll", "n_crs_ports", "flag", "STATUS"]]        
+            print(aholeShortyDf.to_markdown(tablefmt="grid"))
             # PRINT STATEMENTS ARE JUST FOR SYNTAX TESTING COMMENT OUT FOR PRODUCTION
             # print(sqlCommands)
             reportComm = reportComm[:-2]+';'

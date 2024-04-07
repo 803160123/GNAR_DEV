@@ -155,11 +155,21 @@ class AntennaAudit():
         finalAntDf["STATUS"] = finalAntDf["antenna_name"].str.strip() == finalAntDf["ENM_MODEL_DECODE"].str.strip()
         # COMMENT OUT THE BELOW FOR ALL DF COLUMNS
         finalAntDf = finalAntDf[["pulldate", "usid", "enodeb", "eutrancellfdd", "tx_id", "cell_id", "enm_antenna", "enm_antenna_etilt", "antenna_name", "enm_antmodel_key", "ENM_MODEL_DECODE", "STATUS"]]
-        print(finalAntDf.to_markdown(tablefmt="grid")) 
         # SEND ANTENNA ATOLL REPORT TO DIRECTORY 
         antennaPath = REP.buildGnarFile('ANTENNA')
         finalAntDf.to_csv(antennaPath, index=False)
+        # print(finalAntDf.to_markdown(tablefmt="grid")) 
         return finalAntDf
+    
+    def AntennaResults(self) ->None:
+        reportAntDf = self.AntennaChecksum()
+        shortFinalAntDf = reportAntDf[["pulldate","tx_id", "cell_id", "enm_antenna", "enm_antenna_etilt", "antenna_name", "enm_antmodel_key", "ENM_MODEL_DECODE", "STATUS"]]
+        message5 = ['ANTENNA SIMULATION DB -- AUDIT']
+        msg5Dict = {'OPTION 5': message5}    
+        msg5Df = pd.DataFrame(msg5Dict)
+        print(msg5Df.to_markdown(tablefmt="grid", index=False))
+        print(shortFinalAntDf.to_markdown(tablefmt="grid")) 
+        
     
     def AntennaCorrect(self):
         """ THIS METHOD WILL AGAIN OPEN A CONNECTION TO THE DATABASE AND UPDATE(WRITE) THE CORRECTIONS THAT ARE NEEDED AND LOG THOSE CORREXCTION """
@@ -173,10 +183,16 @@ class AntennaAudit():
             if row["STATUS"] == False: 
                 antUpdateQuery += f"UPDATE {antTableName} SET ANTENNA_NAME = '{row['ENM_MODEL_DECODE']}' WHERE TX_ID = '{row['tx_id']}';\n"
                 antReportBuilder += f"(CURRENT_TIMESTAMP,'{row['pulldate']}','{antTableName}',{row['usid']},'{row['enodeb']}','{row['eutrancellfdd']}','antenna_name','{row['antenna_name']}','{row['ENM_MODEL_DECODE']}'),\n"
-            
+         
+        message6 = ['ANTENNA SIMULATION DB -- REMEDIATION']
+        msg6Dict = {'OPTION 6': message6}    
+        msg6Df = pd.DataFrame(msg6Dict)
+        print(msg6Df.to_markdown(tablefmt="grid", index=False))        
         if antUpdateQuery == "":
             print("THERE ARE NO ATOLL ANTENNA DATABASE DISCREPANCIES TO REMEDIATE, NICE JOB!")
         else:
+            shortFixAntDf = fixAntDf[["pulldate","tx_id", "cell_id", "enm_antenna", "enm_antenna_etilt", "antenna_name", "enm_antmodel_key", "ENM_MODEL_DECODE", "STATUS"]]
+            print(shortFixAntDf.to_markdown(tablefmt="grid")) 
             # print(antUpdateQuery)
             antReportBuilder = antReportBuilder[:-2]+';'
             # print(antReportBuilder)
