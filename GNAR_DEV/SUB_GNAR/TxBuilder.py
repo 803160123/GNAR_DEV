@@ -57,11 +57,14 @@ def builder() -> None:
     # print(lteTx)
     
     for _ in range(nsiz):
-        nrSite.append(nrSiteName)
+        # nrSite.append(nrSiteName)
+        lteSite.append(nrSiteName)
+        
         
     for t in range(len(nrBand)):
         for s in range(len(faces)):
-            nrTx.append(f"{nrSiteName}{nrBand[t]}{faces[s]}{suffix}")
+            # nrTx.append(f"{nrSiteName}{nrBand[t]}{faces[s]}{suffix}")
+            lteTx.append(f"{nrSiteName}{nrBand[t]}{faces[s]}{suffix}") 
 
 
     '''
@@ -76,14 +79,7 @@ def builder() -> None:
 
     atollDF = pd.DataFrame(atollDict)
     print(atollDF)
-    '''
-    message6 = ['ANTENNA SIMULATION DB -- REMEDIATION']
-    msg6Dict = {'OPTION 6': message6}    
-    msg6Df = pd.DataFrame(msg6Dict)
-    print(msg6Df.to_markdown(tablefmt="grid", index=False))
-    '''
-
-    
+        
     ''' EXAMPLE
     d = []
     for p in game.players.passing():
